@@ -25,6 +25,7 @@
 ### Semester Assignments
 
 - Link to Assignment 1: [**Assignment 1**](https://github.com/jakov1108/Korisnicka-sucelja/tree/main/Idea-Pitch)
+- Link to Assignment 2: [**Assignment 2**](https://github.com/jakov1108/Korisnicka-sucelja/tree/main/Information-Architecture-and-Personas)
 
 
 ## Project Requirements
