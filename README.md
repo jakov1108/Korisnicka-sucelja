@@ -18,7 +18,7 @@
 
 ### Semester Project
 
-- Link to your production version: [**Production Version**](URL_TO_PRODUCTION_VERSION) <!-- Replace with actual URL -->
+- Link to your production version: [**Production Version**](https://carwiki-lvdi7j7zi-jakovkovac2-1438s-projects.vercel.app/) <!-- Replace with actual URL -->
 - Link to your final report: [**Final Report**](URL_TO_FINAL_REPORT) <!-- Replace with actual URL -->
 <!-- Add more as necessary -->
 
@@ -26,6 +26,7 @@
 
 - Link to Assignment 1: [**Assignment 1**](https://github.com/jakov1108/Korisnicka-sucelja/tree/main/Idea-Pitch)
 - Link to Assignment 2: [**Assignment 2**](https://github.com/jakov1108/Korisnicka-sucelja/tree/main/Information-Architecture-and-Personas)
+- Link to Assignment 3: [**Assignment 3**](https://github.com/jakov1108/Korisnicka-sucelja/tree/main/Deploy)
 
 
 ## Project Requirements
