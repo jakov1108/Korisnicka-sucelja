@@ -27,6 +27,7 @@
 - Link to Assignment 1: [**Assignment 1**](https://github.com/jakov1108/Korisnicka-sucelja/tree/main/Idea-Pitch)
 - Link to Assignment 2: [**Assignment 2**](https://github.com/jakov1108/Korisnicka-sucelja/tree/main/Information-Architecture-and-Personas)
 - Link to Assignment 3: [**Assignment 3**](https://github.com/jakov1108/Korisnicka-sucelja/tree/main/Deploy)
+- Link to Assignment 4: [**Assignment 4**](https://github.com/jakov1108/Korisnicka-sucelja/tree/main/High-fidelity-prototype)
 
 
 ## Project Requirements
