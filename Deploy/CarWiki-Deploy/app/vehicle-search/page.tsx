@@ -1,40 +1,12 @@
-import Link from 'next/link';
 import SearchFilter from './SearchFilter';
+import { fetchCarsFromAPI, Car } from '@/app/lib/cars';
 
-interface Car {
-  id: number;
-  brand: string;
-  model: string;
-  year: number;
-  price: number;
-  horsepower: number;
-  engine: string;
-  image: string;
-}
-
-// Async funkcija za dohvat podataka iz vanjskog API-ja
-async function getCars(): Promise<Car[]> {
-  try {
-    // Dohvaćamo automobile iz našeg API endpointa koji fetcha iz vanjskog servisa
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-    const response = await fetch(`${baseUrl}/api/cars`, {
-      cache: 'no-store', // Uvijek svježi podaci
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch cars');
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching cars:', error);
-    return [];
-  }
-}
+// Označavamo stranicu kao dinamičku
+export const dynamic = 'force-dynamic';
 
 // Server Component
 export default async function VehicleSearch() {
-  const cars = await getCars();
+  const cars = await fetchCarsFromAPI();
 
   return (
     <div className="min-h-screen p-8 max-w-7xl mx-auto">

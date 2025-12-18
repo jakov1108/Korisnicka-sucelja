@@ -1,41 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { fetchCarById, Car } from '@/app/lib/cars';
 
-interface Car {
-  id: number;
-  brand: string;
-  model: string;
-  year: number;
-  price: number;
-  horsepower: number;
-  engine: string;
-  image: string;
-  topSpeed: number;
-  acceleration: number;
-  transmission: string;
-  drivetrain: string;
-  fuelType: string;
-}
-
-// Async funkcija za dohvat podataka iz vanjskog API-ja
-async function getCar(id: string): Promise<Car | null> {
-  try {
-    // Dohvaćamo auto iz našeg API endpointa
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-    const response = await fetch(`${baseUrl}/api/cars/${id}`, {
-      cache: 'no-store', // Uvijek svježi podaci
-    });
-    
-    if (!response.ok) {
-      return null;
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching car:', error);
-    return null;
-  }
-}
+// Označavamo stranicu kao dinamičku
+export const dynamic = 'force-dynamic';
 
 // Server Component - nema 'use client'
 export default async function CarDetailPage({ 
@@ -44,7 +12,7 @@ export default async function CarDetailPage({
   params: Promise<{ id: string }> 
 }) {
   const { id } = await params;
-  const car = await getCar(id);
+  const car = await fetchCarById(parseInt(id));
 
   if (!car) {
     notFound();
