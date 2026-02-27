@@ -19,7 +19,7 @@
 ### Semester Project
 
 - Link to your production version: [**Production Version**](https://carwikibeta.onrender.com/) <!-- Replace with actual URL -->
-- Link to your final report: [**Final Report**](URL_TO_FINAL_REPORT) <!-- Replace with actual URL -->
+- Link to your final report: [**Final Report**](https://www.notion.so/Auto-Wiki-3139e1aeda4980ffb69bf686de0f9b9a?source=copy_link) <!-- Replace with actual URL -->
 <!-- Add more as necessary -->
 
 ### Semester Assignments
