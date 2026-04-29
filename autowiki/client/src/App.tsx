@@ -4,6 +4,9 @@ import { AuthProvider } from "./lib/auth";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import ScrollToTop from "./components/ScrollToTop";
+import ErrorBoundary from "./components/ErrorBoundary";
+import EmailVerificationBanner from "./components/EmailVerificationBanner";
+import { ToastProvider } from "./components/Toast";
 
 // Lazy-load all route pages to reduce critical request chain
 const Home = lazy(() => import("./pages/Home"));
@@ -16,10 +19,12 @@ const Blog = lazy(() => import("./pages/Blog"));
 const BlogPost = lazy(() => import("./pages/BlogPost"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Contact = lazy(() => import("./pages/Contact"));
 const About = lazy(() => import("./pages/About"));
 const SubmitCar = lazy(() => import("./pages/SubmitCar"));
+const Cars = lazy(() => import("./pages/Cars"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 function PageLoader() {
@@ -32,14 +37,17 @@ function PageLoader() {
 
 function App() {
   return (
-    <AuthProvider>
-      <div className="min-h-screen flex flex-col bg-slate-950 text-white">
-        <Navbar />
-        <main className="flex-1">
-          <Router>
-            <ScrollToTop />
-            <Suspense fallback={<PageLoader />}>
-              <Switch>
+    <ErrorBoundary>
+      <AuthProvider>
+        <ToastProvider>
+        <div className="min-h-screen flex flex-col bg-slate-950 text-white">
+          <Navbar />
+          <EmailVerificationBanner />
+          <main className="flex-1">
+            <Router>
+              <ScrollToTop />
+              <Suspense fallback={<PageLoader />}>
+                <Switch>
               <Route path="/" component={Home} />
               <Route path="/automobili" component={Models} />
               {/* Dynamic routing: /brand/model/generation/variant */}
@@ -51,11 +59,13 @@ function App() {
               <Route path="/model/:id" component={ModelDetail} />
               <Route path="/generacija/:id" component={GenerationDetail} />
               <Route path="/varijanta/:id" component={VariantDetail} />
+              <Route path="/pretraga" component={Cars} />
               <Route path="/usporedi" component={Compare} />
               <Route path="/blog" component={Blog} />
               <Route path="/blog/:id" component={BlogPost} />
               <Route path="/prijava" component={Login} />
               <Route path="/registracija" component={Register} />
+              <Route path="/verify-email" component={VerifyEmail} />
               <Route path="/admin" component={Admin} />
               <Route path="/kontakt" component={Contact} />
               <Route path="/o-nama" component={About} />
@@ -63,12 +73,14 @@ function App() {
               {/* Catch-all route for 404 */}
               <Route component={NotFound} />
             </Switch>
-            </Suspense>
-          </Router>
-        </main>
-        <Footer />
-      </div>
-    </AuthProvider>
+              </Suspense>
+            </Router>
+          </main>
+          <Footer />
+        </div>
+        </ToastProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

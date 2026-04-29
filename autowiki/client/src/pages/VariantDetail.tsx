@@ -1,8 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
-import type { CarVariantWithDetails, Image } from "@shared/schema";
+import type { VariantPagePayload } from "@shared/schema";
 import { ArrowLeft, Gauge, Zap, Fuel, Settings, Calendar, Play, ChevronRight, Scale, Ruler, Package, ThumbsUp, ThumbsDown } from "lucide-react";
 import ImageCarousel from "../components/ImageCarousel";
+import { DetailHeaderSkeleton, BreadcrumbSkeleton, SpecCardSkeleton } from "../components/Skeleton";
+import { SpecValue } from "../components/Tooltip";
+import { getOptimizedGalleryImages } from "../lib/images";
+import { usePageMeta } from "../lib/seo";
 
 export default function VariantDetail() {
   // Get params from URL
@@ -15,41 +19,61 @@ export default function VariantDetail() {
   const variantId = params.id;
   const isSlugRoute = !!(brandSlug && modelSlug && generationSlug && variantSlug);
 
-  const { data: variant, isLoading } = useQuery<CarVariantWithDetails>({
+  const { data: pageData, isLoading, isError } = useQuery<VariantPagePayload>({
     queryKey: isSlugRoute 
-      ? ["/api/car", brandSlug, modelSlug, generationSlug, variantSlug] 
-      : ["/api/variants", variantId],
+      ? ["/api/page/car", brandSlug, modelSlug, generationSlug, variantSlug] 
+      : ["/api/page/variant", variantId],
     queryFn: async () => {
       const url = isSlugRoute 
-        ? `/api/car/${brandSlug}/${modelSlug}/${generationSlug}/${variantSlug}`
-        : `/api/variants/${variantId}`;
+        ? `/api/page/car/${brandSlug}/${modelSlug}/${generationSlug}/${variantSlug}`
+        : `/api/page/variant/${variantId}`;
       const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch variant");
+      if (!res.ok) throw new Error("Failed to fetch variant page data");
       return res.json();
     },
     enabled: isSlugRoute ? !!(brandSlug && modelSlug && generationSlug && variantSlug) : !!variantId,
   });
 
-  const { data: variantImages } = useQuery<Image[]>({
-    queryKey: ["/api/images/variant", variant?.id],
-    queryFn: async () => {
-      const res = await fetch(`/api/images/variant/${variant?.id}`);
-      if (!res.ok) throw new Error("Failed to fetch images");
-      return res.json();
-    },
-    enabled: !!variant?.id,
+  const variant = pageData?.variant;
+  const allImages = getOptimizedGalleryImages(pageData?.galleryImages ?? [], {
+    width: 1600,
+    quality: 80,
+    resize: "cover",
   });
 
-  // Combine generation image with variant-specific images, filtering out duplicates
-  const additionalVarImages = variantImages?.map(img => img.url).filter(url => url !== variant?.generation?.image) || [];
-  const allImages = variant?.generation?.image 
-    ? [variant.generation.image, ...additionalVarImages] 
-    : additionalVarImages;
+  usePageMeta({
+    title: variant
+      ? `${variant.model.brand} ${variant.model.model} ${variant.engineName} - Auto Wiki`
+      : "Motorna varijanta - Auto Wiki",
+    description: variant
+      ? `${variant.generation.name}, ${variant.power}, ${variant.fuelType}, ${variant.transmission}. Specifikacije, potrošnja i detalji varijante.`
+      : "Pregledajte specifikacije motorne varijante automobila.",
+    image: variant?.generation?.image,
+  });
+
+  if (isError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-400 text-lg font-semibold mb-2">Greška pri učitavanju varijante</p>
+          <p className="text-slate-400 text-sm">Provjerite internetsku vezu i pokušajte ponovo.</p>
+          <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white keep-white rounded-lg text-sm transition">Pokušaj ponovo</button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Učitavam...</div>
+      <div className="min-h-screen py-12">
+        <div className="container mx-auto px-4 max-w-6xl">
+          <BreadcrumbSkeleton />
+          <DetailHeaderSkeleton />
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
+            <SpecCardSkeleton />
+            <SpecCardSkeleton />
+          </div>
+        </div>
       </div>
     );
   }
@@ -146,6 +170,33 @@ export default function VariantDetail() {
           </div>
 
           <div className="p-6 md:p-8">
+            {/* Top Spec Summary + Compare CTA */}
+            <div className="flex flex-wrap items-center gap-4 mb-6 p-4 bg-slate-900/50 rounded-lg border border-slate-700/50">
+              <div className="flex flex-wrap items-center gap-3 flex-1">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-full text-sm font-medium">
+                  <Zap className="w-3.5 h-3.5" /> {variant.power}
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 text-green-400 rounded-full text-sm font-medium">
+                  <Gauge className="w-3.5 h-3.5" /> {variant.acceleration}
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/10 text-purple-400 rounded-full text-sm font-medium">
+                  <Fuel className="w-3.5 h-3.5" /> {variant.consumption}
+                </span>
+                {variant.topSpeed && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 text-orange-400 rounded-full text-sm font-medium">
+                    {variant.topSpeed}
+                  </span>
+                )}
+              </div>
+              <Link
+                href={`/usporedi?variantId=${variant.id}`}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white keep-white rounded-lg font-medium text-sm transition"
+              >
+                <Scale className="w-4 h-4" />
+                Usporedi
+              </Link>
+            </div>
+
             {/* Engine Specs */}
             <div className="grid md:grid-cols-2 gap-6 mb-8">
               <div className="bg-slate-900 rounded-lg p-6 border border-slate-700">
@@ -205,11 +256,11 @@ export default function VariantDetail() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Mjenjač:</span>
-                    <span className="text-white font-medium">{variant.transmission}</span>
+                    <SpecValue value={variant.transmission} />
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Pogon:</span>
-                    <span className="text-white font-medium">{variant.driveType}</span>
+                    <SpecValue value={variant.driveType} />
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Potrošnja:</span>

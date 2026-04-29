@@ -1,8 +1,15 @@
 import { useLocation } from "wouter";
 import { Home } from "lucide-react";
+import { getOptimizedImageUrl } from "../lib/images";
 
-const PEUGEOT_404_DESKTOP = "https://hjvuiqozcxuvwaedmgkm.supabase.co/storage/v1/object/public/car-images/peugeot-404-desktop.jpg";
-const PEUGEOT_404_MOBILE = "https://hjvuiqozcxuvwaedmgkm.supabase.co/storage/v1/object/public/car-images/peugeot-404-mobile.jpg";
+const PEUGEOT_404_DESKTOP = getOptimizedImageUrl(
+  "https://hjvuiqozcxuvwaedmgkm.supabase.co/storage/v1/object/public/car-images/peugeot-404-desktop.jpg",
+  { width: 1920, quality: 78, resize: "cover" },
+);
+const PEUGEOT_404_MOBILE = getOptimizedImageUrl(
+  "https://hjvuiqozcxuvwaedmgkm.supabase.co/storage/v1/object/public/car-images/peugeot-404-mobile.jpg",
+  { width: 900, quality: 78, resize: "cover" },
+);
 
 export default function NotFound() {
   const [, setLocation] = useLocation();
@@ -51,7 +58,7 @@ export default function NotFound() {
         <div className="space-y-5">
           <button
             onClick={() => setLocation("/")}
-            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white keep-white font-semibold py-3 px-8 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
           >
             <Home size={20} />
             Povratak na početnu stranicu
@@ -65,6 +72,18 @@ export default function NotFound() {
                 className="text-slate-800 dark:text-white bg-white/70 dark:bg-black/40 hover:bg-white/90 dark:hover:bg-black/60 backdrop-blur-sm px-4 py-2 rounded-full transition-all duration-200 hover:scale-105 border border-slate-300 dark:border-white/20"
               >
                 Automobili
+              </a>
+              <a
+                href="/pretraga"
+                className="text-slate-800 dark:text-white bg-white/70 dark:bg-black/40 hover:bg-white/90 dark:hover:bg-black/60 backdrop-blur-sm px-4 py-2 rounded-full transition-all duration-200 hover:scale-105 border border-slate-300 dark:border-white/20"
+              >
+                Pretraga
+              </a>
+              <a
+                href="/usporedi"
+                className="text-slate-800 dark:text-white bg-white/70 dark:bg-black/40 hover:bg-white/90 dark:hover:bg-black/60 backdrop-blur-sm px-4 py-2 rounded-full transition-all duration-200 hover:scale-105 border border-slate-300 dark:border-white/20"
+              >
+                Usporedi
               </a>
               <a
                 href="/blog"

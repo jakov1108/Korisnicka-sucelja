@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import ResponsiveImage from "./ResponsiveImage";
 
 interface ImageCarouselProps {
   images: string[];
@@ -7,6 +8,7 @@ interface ImageCarouselProps {
   autoPlayInterval?: number;
   className?: string;
   aspectRatio?: "video" | "square" | "wide" | "none";
+  sizes?: string;
 }
 
 export default function ImageCarousel({
@@ -15,6 +17,7 @@ export default function ImageCarousel({
   autoPlayInterval = 5000,
   className = "",
   aspectRatio = "video",
+  sizes = "100vw",
 }: ImageCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
@@ -57,11 +60,16 @@ export default function ImageCarousel({
   if (images.length === 1) {
     return (
       <div className={`relative ${aspectClasses[aspectRatio]} overflow-hidden rounded-lg ${className}`}>
-        <img
+        <ResponsiveImage
           src={images[0]}
           alt="Slika"
           className="w-full h-full object-cover"
-          loading="lazy"
+          targetWidth={1600}
+          responsiveWidths={[640, 960, 1280, 1600, 1920]}
+          sizes={sizes}
+          quality={80}
+          resize="cover"
+          loading="eager"
           decoding="async"
           fetchPriority="high"
         />
@@ -81,11 +89,16 @@ export default function ImageCarousel({
         style={{ transform: `translateX(-${currentIndex * 100}%)` }}
       >
         {images.map((image, index) => (
-          <img
+          <ResponsiveImage
             key={index}
             src={image}
             alt={`Slika ${index + 1}`}
             className="w-full h-full object-cover flex-shrink-0"
+            targetWidth={1600}
+            responsiveWidths={[640, 960, 1280, 1600, 1920]}
+            sizes={sizes}
+            quality={80}
+            resize="cover"
             loading={index === 0 ? "eager" : "lazy"}
             decoding="async"
             fetchPriority={index === 0 ? "high" : "low"}
@@ -96,7 +109,7 @@ export default function ImageCarousel({
       {/* Navigation Arrows */}
       <button
         onClick={goToPrevious}
-        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white keep-white opacity-0 group-hover:opacity-100 transition-opacity duration-200"
         aria-label="Prethodna slika"
       >
         <ChevronLeft className="w-5 h-5" />
@@ -104,7 +117,7 @@ export default function ImageCarousel({
 
       <button
         onClick={goToNext}
-        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white keep-white opacity-0 group-hover:opacity-100 transition-opacity duration-200"
         aria-label="Sljedeća slika"
       >
         <ChevronRight className="w-5 h-5" />
@@ -139,7 +152,7 @@ export default function ImageCarousel({
       )}
 
       {/* Counter */}
-      <div className="absolute top-3 right-3 px-2 py-1 bg-black/50 rounded text-white text-sm">
+      <div className="absolute top-3 right-3 px-2 py-1 bg-black/50 rounded text-white keep-white text-sm">
         {currentIndex + 1} / {images.length}
       </div>
 

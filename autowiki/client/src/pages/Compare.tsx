@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X, Check, ChevronRight, Fuel, Gauge, Zap, Settings, Car, Scale, Package } from "lucide-react";
+import { X, Check, ChevronRight, Fuel, Gauge, Zap, Settings, Car, Scale, Package, RotateCcw, Info } from "lucide-react";
 import type { CarModel, CarGeneration, CarVariant } from "@shared/schema";
+import ResponsiveImage from "../components/ResponsiveImage";
+import { useToast } from "../components/Toast";
 
 interface VariantWithDetails extends CarVariant {
   generation?: CarGeneration;
@@ -10,6 +12,41 @@ interface VariantWithDetails extends CarVariant {
 
 export default function Compare() {
   const [selectedVariants, setSelectedVariants] = useState<VariantWithDetails[]>([]);
+  const preloadedRef = useRef(false);
+  const { toast } = useToast();
+
+  // Auto-load variant from URL query param (e.g. /usporedi?variantId=abc)
+  useEffect(() => {
+    if (preloadedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const variantId = params.get("variantId");
+    if (!variantId) return;
+    preloadedRef.current = true;
+
+    (async () => {
+      try {
+        // Fetch variant details
+        const vRes = await fetch(`/api/variants/${variantId}`);
+        if (!vRes.ok) return;
+        const variant = await vRes.json();
+
+        // Fetch generation and model for context
+        let generation: CarGeneration | undefined;
+        let model: CarModel | undefined;
+        try {
+          const gRes = await fetch(`/api/generations/${variant.generationId}`);
+          if (gRes.ok) {
+            const gen = await gRes.json();
+            generation = gen;
+            const mRes = await fetch(`/api/models/${gen.modelId}`);
+            if (mRes.ok) model = await mRes.json();
+          }
+        } catch {}
+
+        setSelectedVariants([{ ...variant, generation, model }]);
+      } catch {}
+    })();
+  }, []);
   const [searchBrand, setSearchBrand] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("");
   const [selectedGenerationId, setSelectedGenerationId] = useState("");
@@ -54,7 +91,10 @@ export default function Compare() {
   const selectedGeneration = generations.find(g => g.id === selectedGenerationId);
 
   const addVariant = (variant: CarVariant) => {
-    if (selectedVariants.length >= 3) return;
+    if (selectedVariants.length >= 3) {
+      toast("Maksimalno 3 vozila mogu biti odabrana za usporedbu.", "warning");
+      return;
+    }
     if (selectedVariants.find(v => v.id === variant.id)) return;
     
     const variantWithDetails: VariantWithDetails = {
@@ -141,6 +181,35 @@ export default function Compare() {
           Odaberite do 3 varijante za usporedbu ({selectedVariants.length}/3 odabrano)
         </p>
 
+        {/* Clear All + Legend bar */}
+        {selectedVariants.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setSelectedVariants([])}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition text-sm"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Obriši sve
+              </button>
+              <span className="text-sm text-slate-500">
+                {selectedVariants.length === 1 && "Dodajte još barem 1 vozilo za usporedbu"}
+                {selectedVariants.length === 2 && "Možete dodati još 1 vozilo"}
+                {selectedVariants.length === 3 && "Maksimalan broj vozila odabran"}
+              </span>
+            </div>
+            {selectedVariants.length >= 2 && (
+              <div className="flex items-center gap-2 text-sm">
+                <Info className="w-4 h-4 text-slate-500" />
+                <span className="text-slate-500">Legenda:</span>
+                <span className="flex items-center gap-1 text-green-400">
+                  <Check className="w-3.5 h-3.5" /> Najbolja vrijednost
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Selected variants comparison */}
         {selectedVariants.length > 0 && (
           <div className="mb-12">
@@ -166,10 +235,17 @@ export default function Compare() {
                     </button>
                     
                     {(variant.generation?.image || variant.model?.image) && (
-                      <img
-                        src={variant.generation?.image || variant.model?.image}
+                      <ResponsiveImage
+                        src={variant.generation?.image || variant.model?.image || ""}
                         alt={`${variant.model?.brand} ${variant.model?.model}`}
                         className="w-full h-40 object-cover rounded-lg mb-3"
+                        targetWidth={800}
+                        responsiveWidths={[480, 640, 800, 960]}
+                        sizes="100vw"
+                        quality={78}
+                        resize="cover"
+                        loading="lazy"
+                        decoding="async"
                       />
                     )}
                     
@@ -239,10 +315,17 @@ export default function Compare() {
                         </button>
                         
                         {(variant.generation?.image || variant.model?.image) && (
-                          <img
-                            src={variant.generation?.image || variant.model?.image}
+                          <ResponsiveImage
+                            src={variant.generation?.image || variant.model?.image || ""}
                             alt={`${variant.model?.brand} ${variant.model?.model}`}
                             className="w-full h-28 object-cover rounded-lg mb-3"
+                            targetWidth={640}
+                            responsiveWidths={[400, 640, 800]}
+                            sizes="(max-width: 1280px) 33vw, 25vw"
+                            quality={78}
+                            resize="cover"
+                            loading="lazy"
+                            decoding="async"
                           />
                         )}
                         
@@ -489,9 +572,18 @@ export default function Compare() {
           <div className="text-center py-12">
             <Car className="w-16 h-16 text-slate-600 mx-auto mb-4" />
             <h3 className="text-xl font-bold text-white mb-2">Započnite usporedbu</h3>
-            <p className="text-slate-400 mb-6">
-              Kliknite na gumb iznad da dodate automobile koje želite usporediti
+            <p className="text-slate-400 mb-4">
+              Usporedite do 3 varijante automobila kako biste vidjeli razlike u specifikacijama.
             </p>
+            <div className="max-w-md mx-auto text-left mb-6 bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+              <p className="text-sm text-slate-300 font-medium mb-2">Kako usporediti:</p>
+              <ol className="text-sm text-slate-400 space-y-1 list-decimal list-inside">
+                <li>Kliknite gumb <span className="text-white">"+ Dodaj automobil za usporedbu"</span> iznad</li>
+                <li>Odaberite marku, model, generaciju i motor</li>
+                <li>Ponovite za još 1–2 vozila</li>
+                <li>Najbolje vrijednosti bit će automatski označene zelenom bojom</li>
+              </ol>
+            </div>
             <div className="flex flex-wrap justify-center gap-2 text-sm text-slate-500">
               <span className="px-3 py-1 bg-slate-800 rounded-full">VW Golf GTI vs BMW 335i</span>
               <span className="px-3 py-1 bg-slate-800 rounded-full">Audi A4 vs Mercedes C-Class</span>

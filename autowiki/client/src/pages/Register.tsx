@@ -1,26 +1,78 @@
 import { useState } from "react";
 import { useAuth } from "../lib/auth";
+import { authClient } from "../lib/auth-client";
+import { useToast } from "../components/Toast";
 import { useLocation, Link } from "wouter";
 import { UserPlus } from "lucide-react";
+import { FcGoogle } from "react-icons/fc";
 
 export default function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const { register } = useAuth();
+  const { success: toastSuccess } = useToast();
   const [, setLocation] = useLocation();
+
+  const markTouched = (field: string) => setTouched(prev => ({ ...prev, [field]: true }));
+
+  // Inline validation rules
+  const nameError = !name.trim() ? "Ime je obavezno" : name.trim().length < 2 ? "Ime mora imati barem 2 znaka" : "";
+  const emailError = !email.trim() ? "Email je obavezan" : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? "Unesite ispravnu email adresu" : "";
+  const passwordError = !password ? "Lozinka je obavezna" : password.length < 6 ? "Lozinka mora imati najmanje 6 znakova" : "";
+
+  const isFormValid = !nameError && !emailError && !passwordError;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTouched({ name: true, email: true, password: true });
+    if (!isFormValid) return;
     setError("");
+    setSuccess("");
     try {
       await register(email, password, name);
-      setLocation("/");
+      const successMessage = "Registracija uspješna! Provjerite email za verifikaciju.";
+      setSuccess(successMessage);
+      toastSuccess(successMessage);
+      setTimeout(() => setLocation("/"), 3000);
     } catch (err: any) {
-      setError(err.message || "Registracija neuspješna");
+      const msg = err.message || "Registracija neuspješna";
+      if (msg.includes("already") || msg.includes("exists") || msg.includes("duplicate")) {
+        setError("Račun s ovom email adresom već postoji. Pokušajte se prijaviti.");
+      } else if (msg.includes("password") || msg.includes("short")) {
+        setError("Lozinka mora imati najmanje 6 znakova.");
+      } else {
+        setError(msg);
+      }
     }
   };
+
+  const handleGoogleRegister = async () => {
+    setIsGoogleLoading(true);
+    setError("");
+    try {
+      await authClient.signIn.social({
+        provider: "google",
+        callbackURL: "/?auth=google",
+      });
+    } catch (err: any) {
+      setError("Google registracija nije uspjela. Pokušajte ponovno.");
+      setIsGoogleLoading(false);
+    }
+  };
+
+  const fieldClass = (fieldError: string, field: string) =>
+    `w-full bg-slate-900 border rounded-lg px-4 py-2 focus:outline-none transition ${
+      touched[field] && fieldError
+        ? "border-red-500 focus:border-red-400"
+        : touched[field] && !fieldError
+          ? "border-green-600 focus:border-green-500"
+          : "border-slate-700 focus:border-blue-500"
+    }`;
 
   return (
     <div className="min-h-screen py-12 flex items-center justify-center">
@@ -31,24 +83,56 @@ export default function Register() {
               Registracija
             </h1>
             <p className="text-slate-400">Stvorite novi račun</p>
+            <p className="text-xs text-slate-500 mt-2">
+              Registracijom dobivate mogućnost predlaganja novih automobila u našu bazu i praćenja statusa vaših prijedloga.
+            </p>
           </div>
 
           {error && (
-            <div className="mb-6 bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded">
+            <div className="mb-6 bg-red-100 border border-red-500 text-red-800 px-4 py-3 rounded dark:bg-red-900/50 dark:border-red-700 dark:text-red-300">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          {success && (
+            <div className="mb-6 bg-green-100 border border-green-500 text-green-800 px-4 py-3 rounded dark:bg-green-900/50 dark:border-green-700 dark:text-green-300">
+              {success}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+            {/* Google Register Button */}
+            <button
+              type="button"
+              onClick={handleGoogleRegister}
+              disabled={isGoogleLoading}
+              className="w-full bg-white hover:bg-gray-100 text-gray-800 px-6 py-3 rounded-lg font-semibold transition flex items-center justify-center space-x-3 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FcGoogle className="w-5 h-5" />
+              <span>{isGoogleLoading ? "Registracija..." : "Nastavi s Google računom"}</span>
+            </button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-600"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-4 bg-slate-800 text-slate-400">ili</span>
+              </div>
+            </div>
+
             <div>
               <label className="block text-sm font-medium mb-2">Ime</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                required
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                onBlur={() => markTouched("name")}
+                className={fieldClass(nameError, "name")}
               />
+              {touched.name && nameError && (
+                <p className="text-red-400 text-xs mt-1">{nameError}</p>
+              )}
             </div>
 
             <div>
@@ -57,9 +141,12 @@ export default function Register() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                onBlur={() => markTouched("email")}
+                className={fieldClass(emailError, "email")}
               />
+              {touched.email && emailError && (
+                <p className="text-red-400 text-xs mt-1">{emailError}</p>
+              )}
             </div>
 
             <div>
@@ -68,10 +155,36 @@ export default function Register() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                onBlur={() => markTouched("password")}
+                className={fieldClass(passwordError, "password")}
               />
+              {touched.password && passwordError && (
+                <p className="text-red-400 text-xs mt-1">{passwordError}</p>
+              )}
+              {/* Password strength meter */}
+              {password.length > 0 && (() => {
+                let strength = 0;
+                if (password.length >= 6) strength++;
+                if (password.length >= 10) strength++;
+                if (/[A-Z]/.test(password)) strength++;
+                if (/[0-9]/.test(password)) strength++;
+                if (/[^A-Za-z0-9]/.test(password)) strength++;
+                const label = strength <= 1 ? "Slaba" : strength <= 3 ? "Srednja" : "Jaka";
+                const color = strength <= 1 ? "bg-red-500" : strength <= 3 ? "bg-yellow-500" : "bg-green-500";
+                const textColor = strength <= 1 ? "text-red-400" : strength <= 3 ? "text-yellow-400" : "text-green-400";
+                const width = `${Math.min(100, strength * 20)}%`;
+                return (
+                  <div className="mt-2">
+                    <div className="h-1.5 w-full bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${color}`}
+                        style={{ width }}
+                      />
+                    </div>
+                    <p className={`text-xs mt-1 ${textColor}`}>Jačina lozinke: {label}</p>
+                  </div>
+                );
+              })()}
             </div>
 
             <button

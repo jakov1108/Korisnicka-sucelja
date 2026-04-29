@@ -1,15 +1,32 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import type { CarModel } from "@shared/schema";
-import { Search, ChevronRight, ArrowLeft } from "lucide-react";
-import { useState } from "react";
+import { Search, ChevronRight, ArrowLeft, Info, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import ResponsiveImage from "../components/ResponsiveImage";
+import { CardGridSkeleton, BreadcrumbSkeleton } from "../components/Skeleton";
+import { usePageMeta } from "../lib/seo";
 
 export default function Models() {
   const params = useParams<{ brandSlug?: string }>();
-  const [searchTerm, setSearchTerm] = useState("");
+  // Pre-fill search from ?q= URL param (e.g. from navbar search)
+  const [searchTerm, setSearchTerm] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get("q") || "";
+  });
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [showHierarchyHelp, setShowHierarchyHelp] = useState(() => {
+    return !localStorage.getItem("hideHierarchyHelp");
+  });
 
-  const { data: models, isLoading } = useQuery<CarModel[]>({
+  // Keep search in sync if user navigates here again with a different ?q=
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const q = urlParams.get("q");
+    if (q !== null) setSearchTerm(q);
+  }, []);
+
+  const { data: models, isLoading, isError } = useQuery<CarModel[]>({
     queryKey: ["/api/models"],
   });
 
@@ -35,6 +52,15 @@ export default function Models() {
     ? brands.find((b: BrandInfo) => b.brandSlug === params.brandSlug) 
     : null;
 
+  usePageMeta({
+    title: selectedBrandInfo
+      ? `${selectedBrandInfo.brand} modeli - Auto Wiki`
+      : "Baza automobila - Auto Wiki",
+    description: selectedBrandInfo
+      ? `Pregledajte modele marke ${selectedBrandInfo.brand}, njihove generacije i motorne varijante.`
+      : "Pregledajte bazu automobila po markama, modelima, generacijama i motornim varijantama.",
+  });
+
   // Get models for selected brand
   const brandModels = params.brandSlug
     ? models?.filter(m => (m.brandSlug || m.brand.toLowerCase().replace(/\s+/g, '-')) === params.brandSlug)
@@ -48,13 +74,50 @@ export default function Models() {
 
   // Filter brands by search term when no brand selected
   const filteredBrands: BrandInfo[] = !params.brandSlug
-    ? brands.filter((b: BrandInfo) => b.brand.toLowerCase().includes(searchTerm.toLowerCase()))
+    ? brands.filter((b: BrandInfo) => {
+        const term = searchTerm.toLowerCase();
+        if (b.brand.toLowerCase().includes(term)) return true;
+        return models?.some(m => {
+          const mBrandSlug = m.brandSlug || m.brand.toLowerCase().replace(/\s+/g, '-');
+          if (mBrandSlug !== b.brandSlug) return false;
+          const combo = `${m.brand} ${m.model}`.toLowerCase();
+          return combo.includes(term) || m.model.toLowerCase().includes(term);
+        }) ?? false;
+      })
     : brands;
+
+  if (isError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-400 text-lg font-semibold mb-2">Greška pri učitavanju podataka</p>
+          <p className="text-slate-400 text-sm">Provjerite internetsku vezu i pokušajte ponovo.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white keep-white rounded-lg text-sm transition"
+          >
+            Pokušaj ponovo
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Učitavam...</div>
+      <div className="min-h-screen py-12">
+        <div className="container mx-auto px-4">
+          <h1 className="text-4xl font-bold mb-8 text-center bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+            Baza Automobila
+          </h1>
+          <BreadcrumbSkeleton />
+          <div className="mb-8">
+            <div className="relative max-w-xl mx-auto">
+              <div className="w-full bg-slate-800 border border-slate-700 rounded-lg h-12 animate-pulse" />
+            </div>
+          </div>
+          <CardGridSkeleton count={8} />
+        </div>
       </div>
     );
   }
@@ -65,6 +128,38 @@ export default function Models() {
         <h1 className="text-4xl font-bold mb-8 text-center bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
           Baza Automobila
         </h1>
+
+        {/* Hierarchy explainer for first-time visitors */}
+        {showHierarchyHelp && !params.brandSlug && (
+          <div className="relative mx-auto mb-6 max-w-4xl rounded-2xl border border-blue-500/20 bg-blue-50/80 p-5 shadow-sm shadow-slate-900/5 dark:bg-blue-500/5 md:p-6">
+            <button
+              onClick={() => { setShowHierarchyHelp(false); localStorage.setItem("hideHierarchyHelp", "1"); }}
+              className="absolute right-4 top-4 text-slate-500 transition-colors hover:text-slate-900 dark:hover:text-white"
+              aria-label="Zatvori"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="mb-3 text-base font-medium text-blue-700 dark:text-blue-300">Kako je organizirana baza?</p>
+                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                  <span className="rounded-md bg-white px-2.5 py-1.5 font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">Marka</span>
+                  <ChevronRight className="w-3 h-3" />
+                  <span className="rounded-md bg-white px-2.5 py-1.5 font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">Model</span>
+                  <ChevronRight className="w-3 h-3" />
+                  <span className="rounded-md bg-white px-2.5 py-1.5 font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">Generacija</span>
+                  <ChevronRight className="w-3 h-3" />
+                  <span className="rounded-md bg-white px-2.5 py-1.5 font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">Varijanta</span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-500">
+                  Npr. <span className="text-slate-700 dark:text-slate-400">Volkswagen</span> → <span className="text-slate-700 dark:text-slate-400">Golf</span> → <span className="text-slate-700 dark:text-slate-400">MK7 (2012–2019)</span> → <span className="text-slate-700 dark:text-slate-400">2.0 TDI 150 KS</span>. 
+                  Odaberite marku za početak pregledavanja.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 mb-6 text-sm justify-center">
@@ -177,12 +272,20 @@ export default function Models() {
                     className="block bg-slate-800 rounded-lg overflow-hidden border border-slate-700 hover:border-blue-500 transition group"
                   >
                     <div className="relative overflow-hidden">
-                      <img
+                      <ResponsiveImage
                         src={model.image}
                         alt={`${model.brand} ${model.model}`}
                         className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+                        targetWidth={720}
+                        responsiveWidths={[400, 640, 720, 960]}
+                        sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 25vw"
+                        quality={78}
+                        resize="cover"
+                        loading="lazy"
+                        decoding="async"
+                        fetchPriority="low"
                       />
-                      <span className="absolute top-3 right-3 bg-blue-600 px-2 py-1 rounded text-xs font-medium">
+                      <span className="absolute top-3 right-3 bg-blue-600 px-2 py-1 rounded text-xs font-medium text-white keep-white">
                         {model.category}
                       </span>
                     </div>

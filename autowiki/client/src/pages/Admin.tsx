@@ -8,35 +8,18 @@ import { Plus, Edit, Trash2, X, Check, XCircle, Clock, Eye, Car, Layers, Setting
 import { ObjectUploader } from "../components/ObjectUploader";
 import MultiImageUploader from "../components/MultiImageUploader";
 import RichTextEditor from "../components/RichTextEditor";
-
-interface ImageItem {
-  id?: string;
-  url: string;
-  isNew?: boolean;
-}
-
-interface CarSubmission {
-  id: string;
-  submittedBy: string;
-  submittedByName: string;
-  status: string;
-  mode: string;
-  modelId: string | null;
-  generationId: string | null;
-  modelData: string | null;
-  generationData: string | null;
-  variantData: string;
-  adminNotes: string | null;
-  createdAt: string;
-}
-
-type Tab = "cars" | "pending" | "submissions" | "blog" | "messages";
+import ConfirmDialog from "../components/ConfirmDialog";
+import { useToast } from "../components/Toast";
+import { LIVE_QUERY_GC_TIME, LIVE_QUERY_STALE_TIME } from "../lib/queryClient";
+import type { AdminCarSubmission as CarSubmission, AdminImageItem as ImageItem, AdminTab as Tab } from "./admin/types";
 
 export default function Admin() {
   const { user, isLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<Tab>("cars");
   const queryClient = useQueryClient();
+  const { success: toastSuccess, error: toastError } = useToast();
+  const isAdminUser = user?.role === "admin";
 
   // Hierarchical navigation state
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
@@ -48,6 +31,25 @@ export default function Admin() {
   const [showGenerationForm, setShowGenerationForm] = useState(false);
   const [showVariantForm, setShowVariantForm] = useState(false);
   const [showBlogForm, setShowBlogForm] = useState(false);
+
+  // Confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+    typeToConfirm?: string;
+    variant?: "danger" | "warning";
+    confirmLabel?: string;
+  }>({ open: false, title: "", description: "", onConfirm: () => {} });
+
+  const showConfirm = (opts: Omit<typeof confirmDialog, "open">) => {
+    setConfirmDialog({ ...opts, open: true });
+  };
+
+  const [rejectDialog, setRejectDialog] = useState<{ open: boolean; submissionId: string; notes: string }>(
+    { open: false, submissionId: "", notes: "" }
+  );
   
   const [editingModel, setEditingModel] = useState<CarModel | null>(null);
   const [editingGeneration, setEditingGeneration] = useState<CarGenerationWithModel | null>(null);
@@ -55,13 +57,14 @@ export default function Admin() {
   const [editingBlog, setEditingBlog] = useState<BlogPost | null>(null);
 
   // Data queries
-  const { data: models } = useQuery<CarModel[]>({ queryKey: ["/api/models"] });
-  const { data: generations } = useQuery<CarGenerationWithModel[]>({ queryKey: ["/api/generations"] });
-  const { data: variants } = useQuery<CarVariantWithDetails[]>({ queryKey: ["/api/variants/admin/all"] });
-  const { data: pendingVariants } = useQuery<CarVariantWithDetails[]>({ queryKey: ["/api/variants/admin/pending"] });
-  const { data: posts } = useQuery<BlogPost[]>({ queryKey: ["/api/blog"] });
-  const { data: messages } = useQuery<ContactMessage[]>({ queryKey: ["/api/contact"] });
-  const { data: submissions } = useQuery<CarSubmission[]>({ queryKey: ["/api/submissions"] });
+  const adminQueryOptions = { enabled: isAdminUser, staleTime: LIVE_QUERY_STALE_TIME, gcTime: LIVE_QUERY_GC_TIME };
+  const { data: models } = useQuery<CarModel[]>({ queryKey: ["/api/models"], ...adminQueryOptions });
+  const { data: generations } = useQuery<CarGenerationWithModel[]>({ queryKey: ["/api/generations"], ...adminQueryOptions });
+  const { data: variants } = useQuery<CarVariantWithDetails[]>({ queryKey: ["/api/variants/admin/all"], ...adminQueryOptions });
+  const { data: pendingVariants } = useQuery<CarVariantWithDetails[]>({ queryKey: ["/api/variants/admin/pending"], ...adminQueryOptions });
+  const { data: posts } = useQuery<BlogPost[]>({ queryKey: ["/api/blog"], ...adminQueryOptions });
+  const { data: messages } = useQuery<ContactMessage[]>({ queryKey: ["/api/contact"], ...adminQueryOptions });
+  const { data: submissions } = useQuery<CarSubmission[]>({ queryKey: ["/api/submissions"], ...adminQueryOptions });
   
   // Filter pending submissions
   const pendingSubmissions = submissions?.filter(s => s.status === "pending") || [];
@@ -76,7 +79,9 @@ export default function Admin() {
       queryClient.invalidateQueries({ queryKey: ["/api/models"] });
       queryClient.invalidateQueries({ queryKey: ["/api/generations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/variants"] });
+      toastSuccess("Model obrisan.");
     },
+    onError: () => toastError("Greška pri brisanju modela."),
   });
 
   const deleteGeneration = useMutation({
@@ -87,7 +92,9 @@ export default function Admin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/generations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/variants"] });
+      toastSuccess("Generacija obrisana.");
     },
+    onError: () => toastError("Greška pri brisanju generacije."),
   });
 
   const deleteVariant = useMutation({
@@ -99,7 +106,9 @@ export default function Admin() {
       queryClient.invalidateQueries({ queryKey: ["/api/variants"] });
       queryClient.invalidateQueries({ queryKey: ["/api/variants/admin/all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/variants/admin/pending"] });
+      toastSuccess("Varijanta obrisana.");
     },
+    onError: () => toastError("Greška pri brisanju varijante."),
   });
 
   const updateVariantStatus = useMutation({
@@ -112,11 +121,13 @@ export default function Admin() {
       if (!res.ok) throw new Error("Failed to update status");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, { status }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/variants"] });
       queryClient.invalidateQueries({ queryKey: ["/api/variants/admin/all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/variants/admin/pending"] });
+      toastSuccess(status === "approved" ? "Varijanta odobrena." : "Varijanta odbijena.");
     },
+    onError: () => toastError("Greška pri ažuriranju statusa."),
   });
 
   const deleteBlog = useMutation({
@@ -124,7 +135,11 @@ export default function Admin() {
       const res = await fetch(`/api/blog/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/blog"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/blog"] });
+      toastSuccess("Blog post obrisan.");
+    },
+    onError: () => toastError("Greška pri brisanju blog posta."),
   });
 
   const deleteMessage = useMutation({
@@ -132,7 +147,11 @@ export default function Admin() {
       const res = await fetch(`/api/contact/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/contact"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contact"] });
+      toastSuccess("Poruka obrisana.");
+    },
+    onError: () => toastError("Greška pri brisanju poruke."),
   });
 
   // Submission mutations
@@ -151,7 +170,9 @@ export default function Admin() {
       queryClient.invalidateQueries({ queryKey: ["/api/generations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/variants"] });
       queryClient.invalidateQueries({ queryKey: ["/api/variants/admin/all"] });
+      toastSuccess("✅ Prijedlog odobren i dodan u bazu.");
     },
+    onError: () => toastError("Greška pri odobravanju prijedloga."),
   });
 
   const rejectSubmission = useMutation({
@@ -166,7 +187,9 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
+      toastSuccess("Prijedlog odbijen.");
     },
+    onError: () => toastError("Greška pri odbijanju prijedloga."),
   });
 
   const deleteSubmission = useMutation({
@@ -174,7 +197,11 @@ export default function Admin() {
       const res = await fetch(`/api/submissions/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/submissions"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
+      toastSuccess("Prijedlog obrisan.");
+    },
+    onError: () => toastError("Greška pri brisanju prijedloga."),
   });
 
   useEffect(() => {
@@ -307,7 +334,7 @@ export default function Admin() {
                         <button
                           onClick={() => updateVariantStatus.mutate({ id: variant.id, status: "approved" })}
                           disabled={updateVariantStatus.isPending}
-                          className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded flex items-center space-x-2 disabled:opacity-50"
+                          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white keep-white rounded flex items-center space-x-2 disabled:opacity-50"
                         >
                           <Check className="w-5 h-5" />
                           <span>Odobri</span>
@@ -315,7 +342,7 @@ export default function Admin() {
                         <button
                           onClick={() => updateVariantStatus.mutate({ id: variant.id, status: "rejected" })}
                           disabled={updateVariantStatus.isPending}
-                          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded flex items-center space-x-2 disabled:opacity-50"
+                          className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white keep-white rounded flex items-center space-x-2 disabled:opacity-50"
                         >
                           <XCircle className="w-5 h-5" />
                           <span>Odbij</span>
@@ -325,13 +352,18 @@ export default function Admin() {
                             setEditingVariant(variant);
                             setShowVariantForm(true);
                           }}
-                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded flex items-center space-x-2"
+                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white keep-white rounded flex items-center space-x-2"
                         >
                           <Edit className="w-5 h-5" />
                           <span>Uredi</span>
                         </button>
                         <button
-                          onClick={() => confirm("Jeste li sigurni?") && deleteVariant.mutate(variant.id)}
+                          onClick={() => showConfirm({
+                            title: "Obrisati varijantu?",
+                            description: `Jeste li sigurni da želite obrisati ovu varijantu? Ova radnja se ne može poništiti.`,
+                            onConfirm: () => deleteVariant.mutate(variant.id),
+                            variant: "danger",
+                          })}
                           className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded flex items-center space-x-2"
                         >
                           <Trash2 className="w-5 h-5" />
@@ -373,8 +405,8 @@ export default function Admin() {
                           <div className="flex items-center gap-2 mb-2">
                             <span className={`px-2 py-1 rounded text-xs font-semibold ${
                               submission.mode === "new" 
-                                ? "bg-blue-600 text-white" 
-                                : "bg-purple-600 text-white"
+                                ? "bg-blue-600 text-white keep-white" 
+                                : "bg-purple-600 text-white keep-white"
                             }`}>
                               {submission.mode === "new" ? "Novi auto" : "Nadogradnja"}
                             </span>
@@ -471,29 +503,35 @@ export default function Admin() {
                         <div className="flex flex-col gap-2 min-w-[120px]">
                           <button
                             onClick={() => {
-                              if (confirm("Odobri ovaj prijedlog? Kreirat će se novi model/generacija/varijanta.")) {
-                                approveSubmission.mutate(submission.id);
-                              }
+                              showConfirm({
+                                title: "Odobriti prijedlog?",
+                                description: "Odobravanjem ovog prijedloga kreirat će se novi model/generacija/varijanta u bazi podataka.",
+                                onConfirm: () => approveSubmission.mutate(submission.id),
+                                variant: "warning",
+                                confirmLabel: "Odobri",
+                              });
                             }}
                             disabled={approveSubmission.isPending}
-                            className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded flex items-center justify-center gap-2 disabled:opacity-50"
+                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white keep-white rounded flex items-center justify-center gap-2 disabled:opacity-50"
                           >
                             <Check className="w-5 h-5" />
                             <span>Odobri</span>
                           </button>
                           <button
-                            onClick={() => {
-                              const notes = prompt("Razlog odbijanja (opcionalno):");
-                              rejectSubmission.mutate({ id: submission.id, notes: notes || undefined });
-                            }}
+                            onClick={() => setRejectDialog({ open: true, submissionId: submission.id, notes: "" })}
                             disabled={rejectSubmission.isPending}
-                            className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded flex items-center justify-center gap-2 disabled:opacity-50"
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white keep-white rounded flex items-center justify-center gap-2 disabled:opacity-50"
                           >
                             <XCircle className="w-5 h-5" />
                             <span>Odbij</span>
                           </button>
                           <button
-                            onClick={() => confirm("Jeste li sigurni da želite obrisati?") && deleteSubmission.mutate(submission.id)}
+                            onClick={() => showConfirm({
+                              title: "Obrisati prijedlog?",
+                              description: "Jeste li sigurni da želite obrisati ovaj prijedlog korisnika?",
+                              onConfirm: () => deleteSubmission.mutate(submission.id),
+                              variant: "danger",
+                            })}
                             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded flex items-center justify-center gap-2"
                           >
                             <Trash2 className="w-5 h-5" />
@@ -615,10 +653,16 @@ export default function Admin() {
                         <ChevronRight className="w-5 h-5 text-slate-500 ml-auto" />
                       </button>
                       <div className="flex gap-2 ml-4">
-                        <button onClick={() => { setEditingModel(model); setShowModelForm(true); }} className="p-2 bg-blue-600 hover:bg-blue-700 rounded">
+                        <button onClick={() => { setEditingModel(model); setShowModelForm(true); }} className="p-2 bg-blue-600 hover:bg-blue-700 text-white keep-white rounded">
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button onClick={() => confirm("Obrisati model i sve generacije/varijante?") && deleteModel.mutate(model.id)} className="p-2 bg-red-600 hover:bg-red-700 rounded">
+                        <button onClick={() => showConfirm({
+                          title: "Obrisati model?",
+                          description: `Brisanjem modela "${model.brand} ${model.model}" obrisat će se i SVE generacije i varijante koje mu pripadaju.\n\nOva radnja se NE MOŽE poništiti.`,
+                          onConfirm: () => deleteModel.mutate(model.id),
+                          typeToConfirm: "OBRIŠI",
+                          variant: "danger",
+                        })} className="p-2 bg-red-600 hover:bg-red-700 text-white keep-white rounded">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -663,10 +707,16 @@ export default function Admin() {
                         <ChevronRight className="w-5 h-5 text-slate-500 ml-auto" />
                       </button>
                       <div className="flex gap-2 ml-4">
-                        <button onClick={() => { setEditingGeneration(gen); setShowGenerationForm(true); }} className="p-2 bg-blue-600 hover:bg-blue-700 rounded">
+                        <button onClick={() => { setEditingGeneration(gen); setShowGenerationForm(true); }} className="p-2 bg-blue-600 hover:bg-blue-700 text-white keep-white rounded">
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button onClick={() => confirm("Obrisati generaciju i sve varijante?") && deleteGeneration.mutate(gen.id)} className="p-2 bg-red-600 hover:bg-red-700 rounded">
+                        <button onClick={() => showConfirm({
+                          title: "Obrisati generaciju?",
+                          description: `Brisanjem generacije "${gen.name}" obrisat će se i SVE varijante motora koje joj pripadaju.\n\nOva radnja se NE MOŽE poništiti.`,
+                          onConfirm: () => deleteGeneration.mutate(gen.id),
+                          typeToConfirm: "OBRIŠI",
+                          variant: "danger",
+                        })} className="p-2 bg-red-600 hover:bg-red-700 text-white keep-white rounded">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -723,10 +773,15 @@ export default function Admin() {
                         <p className="text-slate-400 text-sm">{variant.power} • {variant.fuelType} • {variant.transmission}</p>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => { setEditingVariant(variant); setShowVariantForm(true); }} className="p-2 bg-blue-600 hover:bg-blue-700 rounded">
+                        <button onClick={() => { setEditingVariant(variant); setShowVariantForm(true); }} className="p-2 bg-blue-600 hover:bg-blue-700 text-white keep-white rounded">
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button onClick={() => confirm("Obrisati varijantu?") && deleteVariant.mutate(variant.id)} className="p-2 bg-red-600 hover:bg-red-700 rounded">
+                        <button onClick={() => showConfirm({
+                          title: "Obrisati varijantu?",
+                          description: `Jeste li sigurni da želite obrisati varijantu "${variant.engineName}"?\n\nOva radnja se ne može poništiti.`,
+                          onConfirm: () => deleteVariant.mutate(variant.id),
+                          variant: "danger",
+                        })} className="p-2 bg-red-600 hover:bg-red-700 text-white keep-white rounded">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -777,13 +832,18 @@ export default function Admin() {
                           setEditingBlog(post);
                           setShowBlogForm(true);
                         }}
-                        className="p-2 bg-blue-600 hover:bg-blue-700 rounded"
+                        className="p-2 bg-blue-600 hover:bg-blue-700 text-white keep-white rounded"
                       >
                         <Edit className="w-5 h-5" />
                       </button>
                       <button
-                        onClick={() => confirm("Jeste li sigurni?") && deleteBlog.mutate(post.id)}
-                        className="p-2 bg-red-600 hover:bg-red-700 rounded"
+                        onClick={() => showConfirm({
+                          title: "Obrisati blog post?",
+                          description: `Jeste li sigurni da želite obrisati blog post "${post.title}"?`,
+                          onConfirm: () => deleteBlog.mutate(post.id),
+                          variant: "danger",
+                        })}
+                        className="p-2 bg-red-600 hover:bg-red-700 text-white keep-white rounded"
                       >
                         <Trash2 className="w-5 h-5" />
                       </button>
@@ -812,8 +872,13 @@ export default function Admin() {
                       <p className="text-xs text-slate-500">{new Date(message.date).toLocaleString('hr-HR')}</p>
                     </div>
                     <button
-                      onClick={() => confirm("Jeste li sigurni da želite obrisati ovu poruku?") && deleteMessage.mutate(message.id)}
-                      className="p-2 bg-red-600 hover:bg-red-700 rounded"
+                      onClick={() => showConfirm({
+                        title: "Obrisati poruku?",
+                        description: `Obrisati poruku od ${message.name} (${message.email})?`,
+                        onConfirm: () => deleteMessage.mutate(message.id),
+                        variant: "danger",
+                      })}
+                      className="p-2 bg-red-600 hover:bg-red-700 text-white keep-white rounded"
                       title="Obriši poruku"
                     >
                       <Trash2 className="w-5 h-5" />
@@ -872,6 +937,76 @@ export default function Admin() {
               setEditingBlog(null);
             }}
           />
+        )}
+
+        {/* Confirm Dialog */}
+        <ConfirmDialog
+          open={confirmDialog.open}
+          onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+          onConfirm={confirmDialog.onConfirm}
+          title={confirmDialog.title}
+          description={confirmDialog.description}
+          typeToConfirm={confirmDialog.typeToConfirm}
+          variant={confirmDialog.variant || "danger"}
+          confirmLabel={confirmDialog.confirmLabel ?? "Obriši"}
+          cancelLabel="Odustani"
+        />
+
+        {/* Reject Submission Dialog */}
+        {rejectDialog.open && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setRejectDialog({ open: false, submissionId: "", notes: "" })}
+            />
+            <div className="relative bg-slate-800 rounded-xl border border-red-500/30 shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95">
+              <button
+                onClick={() => setRejectDialog({ open: false, submissionId: "", notes: "" })}
+                className="absolute top-3 right-3 p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-700 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-start gap-4 mb-5">
+                <div className="p-2 rounded-full bg-red-900/20 shrink-0">
+                  <XCircle className="w-6 h-6 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Odbij prijedlog</h3>
+                  <p className="text-sm text-slate-400 mt-1">Navedi razlog odbijanja — korisnik će ga vidjeti uz status prijedloga.</p>
+                </div>
+              </div>
+
+              <textarea
+                autoFocus
+                rows={4}
+                value={rejectDialog.notes}
+                onChange={(e) => setRejectDialog(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="npr. Nedostaju podaci o motoru, pogrešna kategorija, duplikat..."
+                className="w-full bg-slate-900 border border-slate-600 hover:border-slate-500 focus:border-red-500 rounded-lg px-4 py-3 text-sm text-white placeholder-slate-500 resize-none focus:outline-none transition"
+              />
+              <p className="text-xs text-slate-500 mt-1.5 mb-5">Razlog je opcionalan, ali preporučen.</p>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setRejectDialog({ open: false, submissionId: "", notes: "" })}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition"
+                >
+                  Odustani
+                </button>
+                <button
+                  onClick={() => {
+                    rejectSubmission.mutate({ id: rejectDialog.submissionId, notes: rejectDialog.notes || undefined });
+                    setRejectDialog({ open: false, submissionId: "", notes: "" });
+                  }}
+                  disabled={rejectSubmission.isPending}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white keep-white rounded-lg text-sm font-medium transition"
+                >
+                  {rejectSubmission.isPending ? "Učitavam..." : "Odbij prijedlog"}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -991,14 +1126,14 @@ function ModelForm({ model, models, preselectedBrand, onClose }: { model: CarMod
               <button
                 type="button"
                 onClick={() => { setUseNewBrand(false); setFormData({ ...formData, brand: "" }); }}
-                className={`px-3 py-1 rounded text-sm ${!useNewBrand ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'}`}
+                className={`px-3 py-1 rounded text-sm ${!useNewBrand ? 'bg-blue-600 text-white keep-white' : 'bg-slate-700 text-slate-300'}`}
               >
                 Postojeća
               </button>
               <button
                 type="button"
                 onClick={() => { setUseNewBrand(true); setFormData({ ...formData, brand: "" }); }}
-                className={`px-3 py-1 rounded text-sm ${useNewBrand ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'}`}
+                className={`px-3 py-1 rounded text-sm ${useNewBrand ? 'bg-blue-600 text-white keep-white' : 'bg-slate-700 text-slate-300'}`}
               >
                 Nova marka
               </button>
@@ -1829,11 +1964,15 @@ function BlogForm({ post, onClose }: { post: BlogPost | null; onClose: () => voi
       fetch(`/api/images/blog/${post.id}`)
         .then(res => res.json())
         .then((data: { id: string; url: string }[]) => {
-          setImages(data.map(img => ({ id: img.id, url: img.url })));
+          if (data.length > 0) {
+            setImages(data.map(img => ({ id: img.id, url: img.url })));
+          } else if (post.image) {
+            // No images in new table yet — fall back to legacy single image
+            setImages([{ url: post.image }]);
+          }
           setImagesLoaded(true);
         })
         .catch(() => {
-          // If no images endpoint or error, use legacy single image
           if (post.image) {
             setImages([{ url: post.image }]);
           }

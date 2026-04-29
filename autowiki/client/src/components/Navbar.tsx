@@ -1,24 +1,81 @@
-import { useState, useRef, useEffect } from "react";
-import { Link } from "wouter";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
 import { useTheme } from "../lib/theme";
-import { Car, Menu, X, LogOut, UserCircle, Scale, PlusCircle, Sun, Moon } from "lucide-react";
+import { useToast } from "./Toast";
+import { Car, Menu, X, LogOut, UserCircle, Scale, PlusCircle, Sun, Moon, Search, SlidersHorizontal, ChevronDown, Mail, Info } from "lucide-react";
+import ConfirmDialog from "./ConfirmDialog";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { success: toastSuccess, error: toastError } = useToast();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [, navigate] = useLocation();
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
+
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+    setTimeout(() => searchInputRef.current?.focus(), 50);
+  }, []);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery("");
+  }, []);
+
+  const submitSearch = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) return;
+    navigate(`/automobili?q=${encodeURIComponent(q)}`);
+    closeSearch();
+    closeMobileMenu();
+  }, [searchQuery, navigate, closeSearch]);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toastSuccess("Uspješno ste odjavljeni.");
+      closeMobileMenu();
+    } catch (err: any) {
+      toastError(err?.message || "Odjava nije uspjela. Pokušajte ponovno.");
+    }
+  };
+
+  // "/" key shortcut: focus search
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        openSearch();
+      }
+      if (e.key === "Escape" && searchOpen) closeSearch();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [openSearch, closeSearch, searchOpen]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       if (navRef.current && !navRef.current.contains(e.target as Node)) {
         closeMobileMenu();
+        closeSearch();
+        setMoreMenuOpen(false);
+      }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false);
       }
     };
-    if (mobileMenuOpen) {
+    if (mobileMenuOpen || searchOpen || moreMenuOpen) {
       document.addEventListener("mousedown", handleClickOutside);
       document.addEventListener("touchstart", handleClickOutside);
     }
@@ -26,7 +83,7 @@ export default function Navbar() {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("touchstart", handleClickOutside);
     };
-  }, [mobileMenuOpen]);
+  }, [mobileMenuOpen, searchOpen, moreMenuOpen, closeSearch]);
 
   return (
     <nav ref={navRef} className="sticky top-0 z-50 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
@@ -43,29 +100,95 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-6">
-            <Link href="/automobili" className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 px-3 py-1.5 rounded-md transition-all" data-testid="link-cars">
+          <div className="hidden lg:flex items-center gap-3 flex-nowrap whitespace-nowrap">
+            {/* Global Search */}
+            {searchOpen ? (
+              <form onSubmit={submitSearch} className="flex items-center gap-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Pretraži automobile..."
+                    className="bg-slate-800 dark:bg-slate-800 border border-slate-600 focus:border-blue-500 rounded-lg pl-9 pr-4 py-1.5 text-sm text-white placeholder-slate-400 focus:outline-none w-44 transition-all"
+                  />
+                </div>
+                <button type="submit" className="sr-only">Pretraži</button>
+                <button type="button" onClick={closeSearch} className="p-1 text-slate-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </form>
+            ) : (
+              <button
+                onClick={openSearch}
+                className="flex items-center gap-1 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 px-2 py-1.5 rounded-md transition-all"
+                title="Pretraži (/)"
+                aria-label="Pretraži automobile"
+              >
+                <Search className="w-4 h-4" />
+                <span className="text-xs text-slate-400 font-mono">/</span>
+              </button>
+            )}
+            <Link href="/automobili" className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 px-2 py-1.5 rounded-md transition-all" data-testid="link-cars">
               Automobili
             </Link>
-            <Link href="/usporedi" className="flex items-center gap-1 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 px-3 py-1.5 rounded-md transition-all" data-testid="link-compare">
+            <Link href="/pretraga" className="flex items-center gap-1 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 px-2 py-1.5 rounded-md transition-all" data-testid="link-search">
+              <SlidersHorizontal className="w-4 h-4" />
+              <span>Pretraga</span>
+            </Link>
+            <Link href="/usporedi" className="flex items-center gap-1 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 px-2 py-1.5 rounded-md transition-all" data-testid="link-compare">
               <Scale className="w-4 h-4" />
               <span>Usporedi</span>
             </Link>
-            <Link href="/blog" className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 px-3 py-1.5 rounded-md transition-all" data-testid="link-blog">
+            <Link href="/blog" className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 px-2 py-1.5 rounded-md transition-all" data-testid="link-blog">
               Blog
             </Link>
-            <Link href="/kontakt" className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 px-3 py-1.5 rounded-md transition-all" data-testid="link-contact">
-              Kontakt
-            </Link>
-            <Link href="/o-nama" className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 px-3 py-1.5 rounded-md transition-all" data-testid="link-about">
-              O nama
-            </Link>
+
+            {/* "Više" Dropdown */}
+            <div className="relative" ref={moreMenuRef}>
+              <button
+                onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+                className={`flex items-center gap-1 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 px-2 py-1.5 rounded-md transition-all ${
+                  moreMenuOpen ? 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white' : ''
+                }`}
+                aria-expanded={moreMenuOpen}
+                aria-haspopup="true"
+              >
+                <span>Više</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${moreMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {moreMenuOpen && (
+                <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 z-50">
+                  <Link
+                    href="/kontakt"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+                    data-testid="link-contact"
+                    onClick={() => setMoreMenuOpen(false)}
+                  >
+                    <Mail className="w-4 h-4" />
+                    Kontakt
+                  </Link>
+                  <Link
+                    href="/o-nama"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+                    data-testid="link-about"
+                    onClick={() => setMoreMenuOpen(false)}
+                  >
+                    <Info className="w-4 h-4" />
+                    O nama
+                  </Link>
+                </div>
+              )}
+            </div>
 
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-all"
+              className="p-1.5 rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-all"
               aria-label={theme === 'dark' ? 'Uključi svijetli način' : 'Uključi tamni način'}
+              title={theme === 'dark' ? 'Svijetli način' : 'Tamni način'}
             >
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
@@ -73,30 +196,31 @@ export default function Navbar() {
             {user ? (
               <>
                 {user.role !== "admin" && (
-                  <Link href="/predlozi-auto" className="flex items-center gap-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/20 px-3 py-1.5 rounded-md transition-all" data-testid="link-submit-car">
+                  <Link href="/predlozi-auto" className="flex items-center gap-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/20 px-2 py-1.5 rounded-md transition-all" data-testid="link-submit-car">
                     <PlusCircle className="w-4 h-4" />
-                    <span>Dodaj auto</span>
+                    <span>Dodaj automobil</span>
                   </Link>
                 )}
                 {user.role === "admin" && (
-                  <Link href="/admin" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/20 px-3 py-1.5 rounded-md transition-all font-medium" data-testid="link-admin">
-                    Admin Dashboard
+                  <Link href="/admin" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/20 px-2 py-1.5 rounded-md transition-all font-medium" data-testid="link-admin">
+                    Admin
                   </Link>
                 )}
-                <div className="flex items-center gap-3">
-                  <span className="text-slate-500 dark:text-slate-400 text-sm">{user.name}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 dark:text-slate-400 text-sm max-w-[80px] truncate">{user.name}</span>
                   <button
-                    onClick={() => logout()}
+                    onClick={() => setShowLogoutConfirm(true)}
                     className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition-all"
                     data-testid="button-logout"
                     aria-label="Odjava"
+                    title="Odjava"
                   >
-                    <LogOut className="w-5 h-5" />
+                    <LogOut className="w-4 h-4" />
                   </button>
                 </div>
               </>
             ) : (
-              <Link href="/prijava" className="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/20 px-3 py-1.5 rounded-md transition-all" data-testid="link-login">
+              <Link href="/prijava" className="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/20 px-2 py-1.5 rounded-md transition-all" data-testid="link-login">
                 <UserCircle className="w-5 h-5" />
                 <span>Prijava</span>
               </Link>
@@ -106,7 +230,7 @@ export default function Navbar() {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 rounded-md text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition-all"
+            className="lg:hidden p-2 rounded-md text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition-all"
             data-testid="button-mobile-menu"
             aria-label="Otvori izbornik"
             aria-expanded={mobileMenuOpen}
@@ -121,15 +245,33 @@ export default function Navbar() {
 
         {/* Mobile Navigation Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-slate-200 dark:border-slate-800">
-            <div className="flex flex-col gap-4">
-              <Link 
+          <div className="lg:hidden py-4 border-t border-slate-200 dark:border-slate-800">
+            <div className="flex flex-col gap-4">              {/* Mobile Search */}
+              <form onSubmit={submitSearch} className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Pretraži automobile..."
+                  className="w-full bg-slate-800 dark:bg-slate-800 border border-slate-600 focus:border-blue-500 rounded-lg pl-9 pr-4 py-2 text-sm text-white placeholder-slate-400 focus:outline-none"
+                />
+              </form>              <Link 
                 href="/automobili" 
                 className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 px-3 py-2 rounded-md transition-all"
                 data-testid="link-cars-mobile"
                 onClick={closeMobileMenu}
               >
                 Automobili
+              </Link>
+              <Link 
+                href="/pretraga" 
+                className="flex items-center gap-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 px-3 py-2 rounded-md transition-all"
+                data-testid="link-search-mobile"
+                onClick={closeMobileMenu}
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                <span>Napredna pretraga</span>
               </Link>
               <Link 
                 href="/usporedi" 
@@ -203,15 +345,14 @@ export default function Navbar() {
                       data-testid="link-admin-mobile"
                       onClick={closeMobileMenu}
                     >
-                      Admin Dashboard
+                      Upravljačka ploča
                     </Link>
                   )}
                   <div className="flex items-center justify-between py-2 border-t border-slate-200 dark:border-slate-800 pt-4">
                     <span className="text-slate-400 text-sm">{user.name}</span>
                     <button
                       onClick={() => {
-                        logout();
-                        closeMobileMenu();
+                        setShowLogoutConfirm(true);
                       }}
                       className="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 px-3 py-1.5 rounded-md transition-all"
                       data-testid="button-logout-mobile"
@@ -237,6 +378,16 @@ export default function Navbar() {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={handleLogout}
+        title="Odjava"
+        description="Jeste li sigurni da se želite odjaviti?"
+        confirmLabel="Odjavi se"
+        cancelLabel="Odustani"
+        variant="warning"
+      />
     </nav>
   );
 }

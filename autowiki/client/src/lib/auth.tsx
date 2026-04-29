@@ -5,7 +5,7 @@ import type { SafeUser } from "../../../shared/auth-schema";
 interface AuthContextType {
   user: SafeUser | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
+  register: (email: string, password: string, name: string) => Promise<unknown>;
   logout: () => Promise<void>;
   isLoading: boolean;
 }
@@ -36,10 +36,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (result.error) {
       throw new Error(result.error.message || "Registracija neuspješna");
     }
+    
+    // Return success so we can show verification message
+    return result;
   };
 
   const logout = async () => {
-    await authClient.signOut();
+    const result = await authClient.signOut();
+
+    if (result?.error) {
+      throw new Error(result.error.message || "Odjava neuspješna");
+    }
   };
 
   return (
